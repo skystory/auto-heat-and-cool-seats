@@ -41,7 +41,7 @@ while [ -s "$T/seq" ]; do
     case "$line" in
     "up "*) echo "${line#up } 0" > "$UP"; off ;;
     "moving "*) echo "${line#moving }" > "$T/r/moving" ;;
-    "temp "*) echo "${line#temp }" > "$T/r/outside_temp" ;;
+    "temp "*) echo "${line#temp }" > "$T/r/outside_temp"; awk -v c="${line#temp }" 'BEGIN { printf "%.1f\n", c * 9 / 5 + 32 }' > "$T/r/outside_temp_f" ;;
     "temp_f "*) echo "${line#temp_f }" > "$T/r/outside_temp_f" ;;
     0) echo 0 > "$T/r/hv.ready"; off; exit 0 ;;
     *) echo "$line" > "$T/r/hv.ready"; exit 0 ;;
@@ -52,6 +52,8 @@ EOF
 chmod +x "$T"/bin/*
 
 pass=0; fail=0
+# setc <섭씨>: 차량처럼 섭씨·화씨 값을 함께 씀 (화씨는 소수 첫째 자리까지)
+setc() { echo "$1" > "$T/r/outside_temp"; awk -v c="$1" 'BEGIN { printf "%.1f\n", c * 9 / 5 + 32 }' > "$T/r/outside_temp_f"; }
 scenario() {  # scenario <name> <settings json> <hv.ready sequence, one per line> <expected sends> [setup...]
     local name=$1 settings=$2 seq=$3 want=$4 got; shift 4
     rm -rf "$T/r" "$T/sent" "$T/refuse" "$T/ignored"; mkdir "$T/r"
@@ -77,14 +79,14 @@ F=$T/r/outside_temp_f     # 화씨 값 파일
 scenario "cold: defaults, once per start" '{}' "$ON" "$COLD"
 scenario "not READY yet, then READY" '{}' $'0\n0\n1\n1\n1\n1\n1' "$COLD"
 scenario "accessory power only: nothing" '{}' $'0\n0\n0' ""
-scenario "hot: seat coolers, no wheel" '{}' "$ON" "seat_vent driver medium" 'echo 32 > $C'
-scenario "between the limits: nothing" '{}' "$ON" "" 'echo 20 > $C'
-scenario "exactly on the cold limit: heat" '{}' "$ON" "$COLD" 'echo 10 > $C'
-scenario "exactly on the hot limit: cool" '{}' "$ON" "seat_vent driver medium" 'echo 29 > $C'
-scenario "just over the cold limit: nothing" '{}' "$ON" "" 'echo 10.1 > $C'
-scenario "just under the hot limit: nothing" '{}' "$ON" "" 'echo 28.9 > $C'
-scenario "exactly on a negative limit: heat" '{"cold_below":-10,"wheel":false}' "$ON" "seat_heat driver medium" 'echo -10 > $C'
-scenario "just under a limit (decimal)" '{"wheel":false}' "$ON" "seat_heat driver medium" 'echo 9.9 > $C'
+scenario "hot: seat coolers, no wheel" '{}' "$ON" "seat_vent driver medium" 'setc 32'
+scenario "between the limits: nothing" '{}' "$ON" "" 'setc 20'
+scenario "exactly on the cold limit: heat" '{}' "$ON" "$COLD" 'setc 10'
+scenario "exactly on the hot limit: cool" '{}' "$ON" "seat_vent driver medium" 'setc 29'
+scenario "just over the cold limit: nothing" '{}' "$ON" "" 'setc 10.1'
+scenario "just under the hot limit: nothing" '{}' "$ON" "" 'setc 28.9'
+scenario "exactly on a negative limit: heat" '{"cold_below":-10,"wheel":false}' "$ON" "seat_heat driver medium" 'setc -10'
+scenario "just under a limit (decimal)" '{"wheel":false}' "$ON" "seat_heat driver medium" 'setc 9.9'
 scenario "service restart mid-drive: nothing" '{}' "$ON" "" 'echo 1 > $T/r/moving' 'echo "500.00 0" > $UP'
 scenario "just booted, already moving: still on" '{}' "$ON" "$COLD" 'echo 1 > $T/r/moving'
 scenario "seat already on: left alone" '{}' "$ON" "wheel_heat on" 'echo 8 > $T/r/seat_state.driver'
@@ -93,11 +95,13 @@ scenario "wheel already on: left alone" '{}' "$ON" "seat_heat driver medium" 'ec
 scenario "chosen seats and levels" '{"wheel":false,"heat_driver":"off","heat_passenger":"high","heat_rear_left":"low","heat_rear_right":"high"}' "$ON" \
     $'seat_heat passenger high\nseat_heat rear_left low\nseat_heat rear_right high'
 scenario "wheel only" '{"heat_driver":"off"}' "$ON" "wheel_heat on"
-scenario "chosen coolers" '{"cool_driver":"high","cool_passenger":"low"}' "$ON" $'seat_vent driver high\nseat_vent passenger low' 'echo 32 > $C'
-scenario "Celsius limits, spaced JSON" '{"unit": "c", "cold_below": 5, "hot_above": 30, "wheel": false}' "$ON" "seat_heat driver medium" 'echo -3.5 > $C'
-scenario "negative limit" '{"cold_below":-10,"wheel":false}' "$ON" "" 'echo -3 > $C'
-scenario "under a negative limit" '{"cold_below":-10,"wheel":false}' "$ON" "seat_heat driver medium" 'echo -10.5 > $C'
+scenario "chosen coolers" '{"cool_driver":"high","cool_passenger":"low"}' "$ON" $'seat_vent driver high\nseat_vent passenger low' 'setc 32'
+scenario "Celsius limits, spaced JSON" '{"unit": "c", "cold_below": 5, "hot_above": 30, "wheel": false}' "$ON" "seat_heat driver medium" 'setc -3.5'
+scenario "negative limit" '{"cold_below":-10,"wheel":false}' "$ON" "" 'setc -3'
+scenario "under a negative limit" '{"cold_below":-10,"wheel":false}' "$ON" "seat_heat driver medium" 'setc -10.5'
 
+scenario "섭씨 값이 화씨 값과 어긋나면 화씨 값 기준 (원본과 같은 값)" '{"wheel":false}' "$ON" "seat_heat driver medium" 'echo 25 > $C' 'echo 41 > $F'
+scenario "화씨 값이 없으면 섭씨 값 사용" '{"wheel":false}' "$ON" "seat_heat driver medium" 'rm $F' 'echo 5 > $C'
 # --- 화씨를 고른 경우 : 기본 기준 50 ℉ / 85 ℉
 scenario "Fahrenheit: default limits, cold" '{"unit":"f"}' "$ON" "$COLD" 'echo 40 > $F'
 scenario "Fahrenheit: default limits, hot" '{"unit":"f"}' "$ON" "seat_vent driver medium" 'echo 90 > $F'
@@ -116,12 +120,12 @@ scenario "no ℉ value: 30 ℃ is 86 ℉, cool" '{"unit":"f"}' "$ON" "seat_vent 
 
 # --- 값이 없거나 이상할 때
 scenario "no temperature: nothing" '{}' "$ON" "" 'rm $C $F'
-scenario "nonsense temperature: nothing" '{}' "$ON" "" 'echo 400 > $C' 'echo 752 > $F'
-scenario "-40 at startup, then mild: nothing" '{}' $'1\n1\n1\ntemp 25\n1\n1\n1' "" 'echo -40 > $C' 'echo -40 > $F'
-scenario "-40.0 at startup, then cold: heat" '{"wheel":false}' $'1\n1\n1\ntemp 4\n1\n1\n1' "seat_heat driver medium" 'echo -40.0 > $C' 'echo -40.0 > $F'
-scenario "-40 that never changes: nothing" '{}' "$ON" "" 'echo -40 > $C' 'echo -40 > $F'
-scenario "-40 ℉ unit at startup: nothing" '{"unit":"f"}' "$ON" "" 'echo -40 > $C' 'echo -40 > $F'
-scenario "-39.9 is still a temperature: heat" '{"wheel":false}' "$ON" "seat_heat driver medium" 'echo -39.9 > $C'
+scenario "nonsense temperature: nothing" '{}' "$ON" "" 'setc 400' 'echo 752 > $F'
+scenario "-40 at startup, then mild: nothing" '{}' $'1\n1\n1\ntemp 25\n1\n1\n1' "" 'setc -40' 'echo -40 > $F'
+scenario "-40.0 at startup, then cold: heat" '{"wheel":false}' $'1\n1\n1\ntemp 4\n1\n1\n1' "seat_heat driver medium" 'setc -40.0' 'echo -40.0 > $F'
+scenario "-40 that never changes: nothing" '{}' "$ON" "" 'setc -40' 'echo -40 > $F'
+scenario "-40 ℉ unit at startup: nothing" '{"unit":"f"}' "$ON" "" 'setc -40' 'echo -40 > $F'
+scenario "-39.9 is still a temperature: heat" '{"wheel":false}' "$ON" "seat_heat driver medium" 'setc -39.9'
 
 # --- 시동 판단과 재시도
 scenario "off, then a new start" '{"wheel":false}' $'1\n1\n1\n0\n0\n0\n0\n0\n1\n1\n1\n1\n1' $'seat_heat driver medium\nseat_heat driver medium'

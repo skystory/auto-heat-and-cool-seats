@@ -108,16 +108,16 @@ reading_in() {  # reading_in <c|f>: 그 단위로 차량이 보낸 외기온도(
     echo $temp_tenths
 }
 
-outside() {   # 설정 단위의 외기온도(0.1도 단위). 그 단위 값이 없으면 다른 단위 값을 환산. 둘 다 없으면 실패
+outside() {   # 설정 단위의 외기온도(0.1도 단위). 둘 다 없으면 실패
+    # 원본(1.0.x)이 이 차에서 동작을 확인한 화씨 값(outside_temp_f)을 먼저 쓰고 필요하면 섭씨로 환산.
+    # HMG-API의 섭씨 값(outside_temp)은 공조의 섭씨 유효 표시에 기대므로 화씨 값이 없을 때만 씀.
     local temp_tenths
-    if temp_tenths=$(reading_in $unit); then echo $temp_tenths; return 0; fi
-    if [ "$unit" = c ]; then
-        temp_tenths=$(reading_in f) || return 1
-        fahrenheit_to_celsius $temp_tenths
-    else
-        temp_tenths=$(reading_in c) || return 1
-        celsius_to_fahrenheit $temp_tenths
+    if temp_tenths=$(reading_in f); then
+        if [ "$unit" = f ]; then echo $temp_tenths; else fahrenheit_to_celsius $temp_tenths; fi
+        return 0
     fi
+    temp_tenths=$(reading_in c) || return 1
+    if [ "$unit" = c ]; then echo $temp_tenths; else celsius_to_fahrenheit $temp_tenths; fi
 }
 
 unit_symbol() { if [ "$unit" = f ]; then echo ℉; else echo ℃; fi; }

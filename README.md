@@ -10,13 +10,13 @@ v1.0.1을 포크해 **섭씨 우선**과 **한글화**를 적용한 버전입니
 [Cold-start Heat](https://github.com/eclipseempire/hkmc-coldstart-heat)를 HMG-API용으로 옮기고
 통풍과 뒷좌석을 더한 모드입니다.
 
-## 원본과 달라진 점 (v1.1.0 ~ v1.1.1)
+## 원본과 달라진 점 (v1.1.0 ~ v1.1.2)
 
 - 기본 단위가 **섭씨(℃)**이고, 설정 화면에서도 섭씨가 먼저 나옵니다. 기본 기준은 10℃ 이하 열선, 29℃ 이상 통풍입니다.
 - 설정 화면, 모드 설명, 로그, `check` 출력이 한국어입니다.
-- 고른 단위의 외기온도 값이 없으면 다른 단위 값을 환산해서 씁니다.
+- 외기온도는 원본과 같은 화씨 값(`outside_temp_f`)을 읽어 섭씨로 환산합니다(v1.1.2). 화씨 값이 없을 때만 섭씨 값을 씁니다.
 - NEMESIS 패키지의 호환 차종을 **쏘나타 하이브리드(DN8 HEV) 국내형, 펌웨어 260902**로 바꿨습니다.
-- (v1.1.1) 명령은 받아들여졌는데 좌석·핸들 상태를 읽지 못하면, 1분 동안 다시 보내지 않고 상태가
+- (v1.1.2) 명령은 받아들여졌는데 좌석·핸들 상태를 읽지 못하면, 1분 동안 다시 보내지 않고 상태가
   읽히기를 기다렸다가 확인하지 못했다고 로그에 남깁니다. `/proc/uptime`을 읽지 못해도 멈추지 않습니다.
 
 ## 대상 차량
@@ -41,8 +41,8 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
 
 ### HMG-API 앱으로 설치
 
-1. `auto-heat-and-cool-seats-v1.1.1-hmgapi-usb.zip`을 FAT32 USB 메모리 최상위에 압축 해제합니다.
-   `HMGAPI/updates/auto-heat-and-cool-seats-v1.1.1.zip`이 생기면 됩니다.
+1. `auto-heat-and-cool-seats-v1.1.2-hmgapi-usb.zip`을 FAT32 USB 메모리 최상위에 압축 해제합니다.
+   `HMGAPI/updates/auto-heat-and-cool-seats-v1.1.2.zip`이 생기면 됩니다.
 2. 차량에 꽂고 HMG-API 앱의 업데이트 화면에서 모드를 설치합니다.
 3. 앱에서 **Apply changes**를 누릅니다.
 
@@ -50,7 +50,7 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
 
 ### NEMESIS로 설치
 
-1. `auto-heat-and-cool-seats-v1.1.1-nemesis-usb.zip`을 FAT32 또는 exFAT USB 메모리 최상위에
+1. `auto-heat-and-cool-seats-v1.1.2-nemesis-usb.zip`을 FAT32 또는 exFAT USB 메모리 최상위에
    압축 해제합니다. `NEMESIS.data`와 `packages` 폴더가 최상위에 있어야 하며, USB에는 NEMESIS
    패키지를 하나만 두세요.
 2. Android가 다 켜진 뒤 USB를 꽂고 설치를 확인합니다.
@@ -85,8 +85,8 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
   동작하지 않습니다. 시동이 꺼진 값을 한 번이라도 읽으면 다음 READY를 새 시동으로 봅니다.
   READY 상태에서 헤드유닛이 부팅되거나 슬립에서 깨어난 경우(`/proc/uptime`이 크게 뛴 경우)도
   시동으로 봅니다.
-- 설정 단위의 외기온도(`outside_temp` 또는 `outside_temp_f`)를 쓰고, 그 값이 없으면 다른 단위
-  값을 환산합니다. 시동이 켜져 있는 동안 첫 값을 기다리며, 쓸 만한 값이 없으면 아무것도 하지
+- 외기온도는 원본과 같은 화씨 값(`outside_temp_f`)을 먼저 읽어 설정 단위로 환산하고, 화씨 값이
+  없을 때만 섭씨 값(`outside_temp`)을 씁니다. 시동이 켜져 있는 동안 첫 값을 기다리며, 쓸 만한 값이 없으면 아무것도 하지
   않습니다. 시동 직후 공조가 실제 값 대신 -40을 보낼 수 있어, 정확히 -40(℃/℉ 동일)은 아직
   값이 없는 것으로 보고 계속 기다립니다. 실제 -40도 무시됩니다.
 - 명령은 `hmgapid vehicle-do`로 `seat_heat`, `seat_vent`, `wheel_heat`을 보냅니다.
