@@ -22,8 +22,10 @@ META = "META-HMGAPI"
 # what NEMESIS's store shows as compatible: only what the mod was tested on. A glob of
 # ro.build.product, and the unit's /system/onebin folder name. mod.json has no "system",
 # so HMG-API itself doesn't refuse other cars.
-TESTED_OS = "CVEV.USA.*.260507"
-TESTED_MODELS = "cvev_us"
+# 이 포크의 대상: 쏘나타 하이브리드(DN8 HEV) 국내형 260902 펌웨어
+#   ro.build.product = DN823HEV.KOR.0000.V039.001.260902, onebin 폴더 = dn823hev_kr
+TESTED_OS = "DN823HEV.KOR.*.260902"
+TESTED_MODELS = "dn823hev_kr"
 
 
 def openssl(*args, data=None):

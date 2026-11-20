@@ -1,132 +1,123 @@
-# Auto Heat and Cool Seats (HMG-API mod)
+# 자동 열선·통풍 시트 (Auto Heat and Cool Seats, HMG-API 모드)
 
-When the car starts, this checks the outside temperature and turns on what you picked:
+시동을 걸면 외기온도를 확인해서, 설정해 둔 장치를 켭니다.
 
-- **At or below the cold limit:** seat heaters and steering wheel heat.
-- **At or above the hot limit:** seat coolers.
+- **추위 기준 이하:** 시트 열선과 핸들 열선
+- **더위 기준 이상:** 통풍 시트
 
-It's the HMG-API version of [Cold-start Heat](https://github.com/eclipseempire/hkmc-coldstart-heat)
-by eclipseempire, with seat cooling and rear seats added.
+이 저장소는 [dibble9012/auto-heat-and-cool-seats](https://github.com/dibble9012/auto-heat-and-cool-seats)
+v1.0.1을 포크해 **섭씨 우선**과 **한글화**를 적용한 버전입니다. 원본은 eclipseempire의
+[Cold-start Heat](https://github.com/eclipseempire/hkmc-coldstart-heat)를 HMG-API용으로 옮기고
+통풍과 뒷좌석을 더한 모드입니다.
 
-**[Download the latest release](https://github.com/dibble9012/auto-heat-and-cool-seats/releases/latest)**
+## 원본과 달라진 점 (v1.1.0)
 
-Tested on:
+- 기본 단위가 **섭씨(℃)**이고, 설정 화면에서도 섭씨가 먼저 나옵니다. 기본 기준은 10℃ 이하 열선, 29℃ 이상 통풍입니다.
+- 설정 화면, 모드 설명, 로그, `check` 출력이 한국어입니다.
+- 고른 단위의 외기온도 값이 없으면 다른 단위 값을 환산해서 씁니다.
+- NEMESIS 패키지의 호환 차종을 **쏘나타 하이브리드(DN8 HEV) 국내형, 펌웨어 260902**로 바꿨습니다.
 
-- 2023 Kia EV6 GT-Line (USA), firmware 260507, with HMG-API 1.0.0
-- 2023 Kia Niro Wave EV (USA), firmware 260507, with HMG-API 1.0.2 (see [Known issues](#known-issues))
+## 대상 차량
 
-## Known issues
+- 현대 쏘나타 하이브리드(DN8 HEV) 국내형, 펌웨어 260902 (`DN823HEV.KOR`), HMG-API 1.0.2
+  : HMG-API 차량 리포트로 필요한 차량 기능(READY, 외기온도, 시트 상태·단계, 핸들 열선)이
+  매핑된 것을 확인했습니다. **실차 동작은 아직 검증 전**입니다.
 
-**The head unit restarts shortly after the car starts, on a 2023 Kia Niro EV (USA, firmware
-260507, HMG-API 1.0.2).** The screen restarts within about 30 seconds of the car coming on, once
-for each car start. It then stays up until the next start.
+원본이 시험된 차량: 2023 기아 EV6 GT-Line(미국, 260507), 2023 기아 니로 EV(미국, 260507).
 
-The bug is in HMG-API's vehicle service, which this mod needs in order to read the car. When the
-car sends Digital Key data at start, the service's reply to that callback is missing an array the
-car's body control service expects, and that crashes the Android system. Other cars with Digital
-Key may be affected. The mod's own seat and wheel commands aren't the cause.
+## 알려진 문제 (원본 기준)
 
-There's no workaround in the mod yet. If this happens on your car, remove the mod to stop it.
-A fix for HMG-API is in [pull request #101](https://github.com/VysseCodes/HMG-API/pull/101), which
-hasn't been merged yet.
+**2023 기아 니로 EV(미국, 260507, HMG-API 1.0.2)에서 시동 후 약 30초 안에 헤드유닛이 한 번
+재시작됩니다.** 원인은 이 모드가 아니라 HMG-API 차량 서비스의 디지털 키 콜백 처리 버그이며,
+디지털 키가 있는 다른 차량도 영향을 받을 수 있습니다. 수정은 HMG-API
+[PR #101](https://github.com/VysseCodes/HMG-API/pull/101)에 올라가 있습니다.
 
-## Install
+## 설치
 
-You need HMG-API 1.0.0 or later on the car first. Both methods use a USB flash drive. Download
-the file for your method from the
-[latest release](https://github.com/dibble9012/auto-heat-and-cool-seats/releases/latest), listed
-under **Assets**.
+차량에 HMG-API 1.0.0 이상이 먼저 설치돼 있어야 합니다. 두 방법 모두 USB 메모리를 씁니다.
+USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하므로 꺼 두세요.
 
-ADB over USB has to be off, or the port can't read the drive.
+### HMG-API 앱으로 설치
 
-### With the HMG-API app
+1. `auto-heat-and-cool-seats-v1.1.0-hmgapi-usb.zip`을 FAT32 USB 메모리 최상위에 압축 해제합니다.
+   `HMGAPI/updates/auto-heat-and-cool-seats-v1.1.0.zip`이 생기면 됩니다.
+2. 차량에 꽂고 HMG-API 앱의 업데이트 화면에서 모드를 설치합니다.
+3. 앱에서 **Apply changes**를 누릅니다.
 
-1. Download `auto-heat-and-cool-seats-v1.0.1-hmgapi-usb.zip`.
-2. Unzip it onto the top level of a FAT32 flash drive, so the drive has
-   `HMGAPI/updates/auto-heat-and-cool-seats-v1.0.1.zip`.
-3. Plug the drive into the car and install the mod from the updates page in the HMG-API app.
-4. Tap **Apply changes** in the app.
+삭제도 HMG-API 앱에서 합니다.
 
-To remove the mod, use the HMG-API app.
+### NEMESIS로 설치
 
-### With NEMESIS
+1. `auto-heat-and-cool-seats-v1.1.0-nemesis-usb.zip`을 FAT32 또는 exFAT USB 메모리 최상위에
+   압축 해제합니다. `NEMESIS.data`와 `packages` 폴더가 최상위에 있어야 하며, USB에는 NEMESIS
+   패키지를 하나만 두세요.
+2. Android가 다 켜진 뒤 USB를 꽂고 설치를 확인합니다.
+3. 재시작하라고 하면 헤드유닛을 재시작하고 USB를 뺍니다.
 
-1. Download `auto-heat-and-cool-seats-v1.0.1-nemesis-usb.zip`.
-2. Unzip it onto the top level of a FAT32 or exFAT flash drive, so the drive has `NEMESIS.data`
-   and the `packages` folder at its top level. Keep only one NEMESIS package on the drive.
-3. Once Android is up, plug the drive into the car and confirm the install of
-   "Auto Heat and Cool Seats".
-4. Restart the head unit if it asks, then take the drive out.
+삭제는 NEMESIS Manager에서 패키지를 제거합니다.
 
-HMG-API installs and applies the mod for you. To remove it, uninstall the package in NEMESIS
-Manager.
+> **서명 키 주의:** 업데이트는 처음 설치한 모드와 같은 키로 서명돼야 합니다. 원본(dibble9012)
+> 모드가 이미 설치돼 있다면 먼저 삭제한 뒤 이 버전을 설치하세요.
 
-## Settings (HMG-API app)
+## 설정 (HMG-API 앱)
 
-| Setting | Default |
+| 설정 | 기본값 |
 |---|---|
-| Unit for the limits (Fahrenheit or Celsius) | Fahrenheit |
-| Cold limit | 50 |
-| Hot limit | 85 |
-| Steering wheel heat when it's cold | on |
-| Heat level for driver and passenger (off, low, medium, high) | driver medium, passenger off |
-| Heat level for rear left and rear right (off, low, high) | off |
-| Cooling level for driver and passenger (off, low, medium, high) | driver medium, passenger off |
+| 기준 온도 단위 (섭씨/화씨) | 섭씨 |
+| 추위 기준: 이 온도 이하이면 열선 켜기 | 10 |
+| 더위 기준: 이 온도 이상이면 통풍 켜기 | 29 |
+| 추울 때 핸들 열선 켜기 | 켬 |
+| 추울 때 운전석 / 조수석 열선 (켜지 않음, 1~3단) | 운전석 2단, 조수석 켜지 않음 |
+| 추울 때 뒷좌석 왼쪽 / 오른쪽 열선 (켜지 않음, 1~2단) | 켜지 않음 |
+| 더울 때 운전석 / 조수석 통풍 (켜지 않음, 1~3단) | 운전석 2단, 조수석 켜지 않음 |
 
-The first time the mod sends a command, HMG-API asks on screen whether to allow it. There's
-one question each for seat heat, seat cooling and wheel heat. The mod keeps trying for a
-minute while a question is up, so the first start can look slow. After that, the question
-comes back at the next start that needs it.
+- 단위를 바꿔도 기준 온도는 자동으로 바뀌지 않으니 함께 고쳐 주세요.
+- **통풍 시트가 없는 차량이면 통풍 항목을 모두 '켜지 않음'으로 두세요.**
+- 모드가 처음 명령을 보낼 때 HMG-API가 화면에 허용 여부를 묻습니다(시트 열선, 시트 통풍,
+  핸들 열선 각각 한 번). 질문이 떠 있는 동안 모드는 1분까지 다시 시도하므로 첫 시동은 느려
+  보일 수 있습니다.
 
-## How it works
+## 동작 방식
 
-- A start is `hv.ready` turning 1, checked every 3 seconds. Accessory power alone doesn't
-  count. One read of the car being off is enough for the next READY to be a new start. The
-  mod also catches a head unit that boots after the car is READY, or that wakes from sleep
-  (a jump in `/proc/uptime`).
-- It takes `outside_temp_f` or `outside_temp`, waiting as long as the car stays on for a first
-  value. With no sensible value, it does nothing. Right after the car starts, climate control
-  can report -40 before it has a reading, so the mod treats exactly -40 (°F or °C) as no value
-  yet and keeps waiting. A real -40 is skipped too.
-- It sends `seat_heat`, `seat_vent` and `wheel_heat` through `hmgapid vehicle-do`. HMG-API
-  calls the car's methods by name, so the mod has no service numbers of its own.
-- It leaves a seat alone if it's already heating or cooling, and doesn't touch the wheel if
-  it's already on.
-- If the car doesn't show a change, the mod sends it again every 3 seconds for up to a minute.
-  It stops once the car shows the change or turns off.
-- If the car is already moving at READY and the head unit has been up for 3 minutes or more,
-  it does nothing, so a service restart mid-drive won't turn back on something you turned off.
-  Within 3 minutes of the head unit booting, it still applies, because you may have driven off
-  before the unit finished booting. A head unit reboot mid-drive counts as a start.
-- `hmgapid vehicle` answers at once but then waits 3 seconds to finish, holding one of the 8
-  workers all mods share. The mod reads everything it needs in one background call and takes
-  just the answer, so the wait doesn't slow it or tie up more workers.
+- 시동은 `hv.ready`가 1이 되는 순간이며, 3초마다 확인합니다. ACC(액세서리 전원)만으로는
+  동작하지 않습니다. 시동이 꺼진 값을 한 번이라도 읽으면 다음 READY를 새 시동으로 봅니다.
+  READY 상태에서 헤드유닛이 부팅되거나 슬립에서 깨어난 경우(`/proc/uptime`이 크게 뛴 경우)도
+  시동으로 봅니다.
+- 설정 단위의 외기온도(`outside_temp` 또는 `outside_temp_f`)를 쓰고, 그 값이 없으면 다른 단위
+  값을 환산합니다. 시동이 켜져 있는 동안 첫 값을 기다리며, 쓸 만한 값이 없으면 아무것도 하지
+  않습니다. 시동 직후 공조가 실제 값 대신 -40을 보낼 수 있어, 정확히 -40(℃/℉ 동일)은 아직
+  값이 없는 것으로 보고 계속 기다립니다. 실제 -40도 무시됩니다.
+- 명령은 `hmgapid vehicle-do`로 `seat_heat`, `seat_vent`, `wheel_heat`을 보냅니다.
+- 이미 열선이나 통풍이 켜진 좌석, 이미 켜진 핸들 열선은 건드리지 않습니다.
+- 차량에 반영된 게 보이지 않으면 3초마다 최대 1분 동안 다시 보냅니다.
+- READY 시점에 이미 주행 중이고 헤드유닛이 켜진 지 3분이 넘었으면, 서비스가 재시작된 것으로
+  보고 아무것도 하지 않습니다.
 
-The log is at `/data/hmgapi/logs/auto-heat-and-cool-seats/seats.log`. On the car,
-`sh seats.sh check [temp]` prints what the mod would do and sends nothing.
+로그는 `/data/hmgapi/logs/auto-heat-and-cool-seats/seats.log`에 남습니다. 차량에서
+`sh seats.sh check [온도]`를 실행하면 실제로 명령을 보내지 않고 무엇을 할지만 출력합니다.
 
-## Build
+## 빌드
 
-You need a checkout of [HMG-API](https://github.com/VysseCodes/HMG-API), whose
-`tools/mknemesismod.sh` makes the NEMESIS package.
+[HMG-API](https://github.com/VysseCodes/HMG-API) 소스 체크아웃이 필요합니다
+(`tools/mknemesismod.sh`로 NEMESIS 패키지를 만듭니다). openssl, zip, unzip이 필요합니다.
 
 ```bash
+./build.py keygen ~/.hmgapi/author.key      # 처음 한 번: 본인 서명 키 생성
 ./build.py ~/.hmgapi/author.key ../HMG-API
 ```
 
-This writes the two release files to `dist/`, along with
-`auto-heat-and-cool-seats-v1.0.1.hmgapi.zip`, the signed mod inside them, and
-`auto-heat-and-cool-seats-v1.0.1-nemesis-package.zip`, the file to upload to the NEMESIS Package
-Store. Updates must be signed with the same key as the first install.
+`dist/`에 설치용 파일 두 개(`-hmgapi-usb.zip`, `-nemesis-usb.zip`)와 서명된 모드
+(`.hmgapi.zip`), NEMESIS 패키지 스토어용 파일(`-nemesis-package.zip`)이 만들어집니다.
 
-## Test
+## 테스트
 
 ```bash
 test/run.sh
 ```
 
-This runs the script off the car under bash, with a fake `hmgapid` and `sleep`.
+가짜 `hmgapid`와 `sleep`으로 차량 없이 bash에서 스크립트를 돌립니다.
 
-## License
+## 라이선스
 
-AGPL-3.0. See [LICENSE](LICENSE).
+AGPL-3.0. [LICENSE](LICENSE)를 참고하세요. 이 버전은 원본을 수정한 것이며,
+수정 내용은 위 "원본과 달라진 점"과 Git 이력에 있습니다.

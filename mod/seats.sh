@@ -1,20 +1,29 @@
 #!/system/bin/sh
-# Auto Heat and Cool Seats: on each car start, turns on the seat heaters and wheel heat when
-# it's cold outside, or the seat coolers when it's hot. Idea from eclipseempire's
-# Cold-start Heat; here the readings and commands are HMG-API's (hmgapid vehicle,
-# hmgapid vehicle-do), so there are no service numbers or logcat parsing.
+# 자동 열선·통풍 시트 (Auto Heat and Cool Seats)
 #
-# A start is hv.ready turning 1. The service also sees that when the head unit boots
-# after the car is READY, and after the unit has slept (a jump in /proc/uptime).
+# 시동을 걸 때마다 외기온도를 확인해, 추우면 시트 열선과 핸들 열선을, 더우면 통풍 시트를 켭니다.
+# 원작: eclipseempire의 Cold-start Heat → dibble9012의 HMG-API 버전 → 섭씨 우선·한글화(story-sw).
+# 차량 값 읽기와 명령은 HMG-API(hmgapid vehicle, hmgapid vehicle-do)를 쓰므로
+# 서비스 번호나 logcat 파싱이 필요 없습니다.
 #
-# Usage: seats.sh               run as the mod's service
-#        seats.sh check [temp]  print what it would do now, or at temp; sends nothing
+# 시동 = hv.ready가 1이 되는 순간. 차가 이미 READY인 상태에서 헤드유닛이 부팅되거나,
+# 헤드유닛이 슬립에서 깨어난 경우(/proc/uptime이 크게 뛴 경우)도 시동으로 봅니다.
 #
-# mksh only: the head unit has no sed, cut or expr.
+# 사용법: seats.sh               모드 서비스로 실행
+#         seats.sh check [온도]  지금(또는 지정한 온도에서) 무엇을 보낼지 출력만 함, 명령은 안 보냄
+#
+# mksh 전용: 헤드유닛에는 sed, cut, expr가 없습니다.
 
 MOD=auto-heat-and-cool-seats
 START="hv.ready moving outside_temp outside_temp_f"
 UP=${UP:-/proc/uptime}
+
+# 설정을 한 번도 저장하지 않았을 때 쓰는 기본값 (settings.json의 default와 맞춰 둘 것)
+DEFAULT_UNIT=c
+DEFAULT_COLD_LIMIT_C=10      # 섭씨: 이 온도 이하이면 열선
+DEFAULT_HOT_LIMIT_C=29       # 섭씨: 이 온도 이상이면 통풍
+DEFAULT_COLD_LIMIT_F=50      # 화씨를 고른 경우
+DEFAULT_HOT_LIMIT_F=85
 
 log() { echo "$(date '+%m-%d %H:%M:%S') $*"; }
 
@@ -51,6 +60,18 @@ limit() {     # limit <key> <default>: a whole-degree setting, in tenths
     tenths "$(setting $1 $2)" || tenths $2
 }
 
+cold_limit() {  # 추위 기준(설정 단위의 0.1도 단위)
+    if [ "$unit" = f ]; then limit cold_below $DEFAULT_COLD_LIMIT_F
+    else limit cold_below $DEFAULT_COLD_LIMIT_C
+    fi
+}
+
+hot_limit() {   # 더위 기준(설정 단위의 0.1도 단위)
+    if [ "$unit" = f ]; then limit hot_above $DEFAULT_HOT_LIMIT_F
+    else limit hot_above $DEFAULT_HOT_LIMIT_C
+    fi
+}
+
 tenths() {    # tenths <reading>: 73 -> 730, -3.5 -> -35; fails on anything else
     local v=$1 s=1 w f
     case "$v" in -*) s=-1; v=${v#-} ;; esac
@@ -61,33 +82,71 @@ tenths() {    # tenths <reading>: 73 -> 730, -3.5 -> -35; fails on anything else
     echo $(( s * (10#$w * 10 + 10#$f) ))
 }
 
-outside() {   # the outside temperature in tenths of the settings' unit; fails if there's none yet
-    local t
-    if [ "$unit" = c ]; then t=$(tenths "$(seen outside_temp)") || return 1
-    else t=$(tenths "$(seen outside_temp_f)") || return 1
+divide_rounded() {  # divide_rounded <나눌 수> <나누는 수>: 반올림한 정수 몫 (음수도 대칭)
+    local dividend=$1 divisor=$2
+    if [ $dividend -lt 0 ]; then echo $(( (dividend - divisor / 2) / divisor ))
+    else echo $(( (dividend + divisor / 2) / divisor ))
     fi
-    if [ "$unit" = c ]; then [ $t -ge -500 ] && [ $t -le 600 ] || return 1
-    else [ $t -ge -580 ] && [ $t -le 1400 ] || return 1
-    fi
-    [ $t = -400 ] && return 1   # -40, the same in F and C: climate control's value before it has a reading
-    echo $t
 }
 
-deg() {       # deg <tenths>: for the log
+fahrenheit_to_celsius() {  # 0.1도 단위끼리 변환: 500(50.0℉) -> 100(10.0℃)
+    divide_rounded $(( ($1 - 320) * 5 )) 9
+}
+
+celsius_to_fahrenheit() {  # 0.1도 단위끼리 변환: 100(10.0℃) -> 500(50.0℉)
+    echo $(( $(divide_rounded $(( $1 * 9 )) 5) + 320 ))
+}
+
+reading_in() {  # reading_in <c|f>: 그 단위로 차량이 보낸 외기온도(0.1도 단위), 쓸 만한 값이 없으면 실패
+    local field lowest highest temp_tenths
+    if [ "$1" = c ]; then field=outside_temp;   lowest=-500; highest=600
+    else                  field=outside_temp_f; lowest=-580; highest=1400
+    fi
+    temp_tenths=$(tenths "$(seen $field)") || return 1
+    [ $temp_tenths -ge $lowest ] && [ $temp_tenths -le $highest ] || return 1
+    [ $temp_tenths = -400 ] && return 1   # -40, the same in F and C: climate control's value before it has a reading
+    echo $temp_tenths
+}
+
+outside() {   # 설정 단위의 외기온도(0.1도 단위). 그 단위 값이 없으면 다른 단위 값을 환산. 둘 다 없으면 실패
+    local temp_tenths
+    if temp_tenths=$(reading_in $unit); then echo $temp_tenths; return 0; fi
+    if [ "$unit" = c ]; then
+        temp_tenths=$(reading_in f) || return 1
+        fahrenheit_to_celsius $temp_tenths
+    else
+        temp_tenths=$(reading_in c) || return 1
+        celsius_to_fahrenheit $temp_tenths
+    fi
+}
+
+unit_symbol() { if [ "$unit" = f ]; then echo ℉; else echo ℃; fi; }
+
+deg() {       # deg <tenths>: 로그용 표기 (예: -3.5℃)
     local a=$1 s=
     [ $a -lt 0 ] && { s=-; a=$(( -a )); }
-    echo "$s$(( a / 10 )).$(( a % 10 )) $unit"
+    echo "$s$(( a / 10 )).$(( a % 10 ))$(unit_symbol)"
+}
+
+seat_name() { # seat_name <좌석 키>: 로그용 좌석 이름
+    case $1 in
+    driver)     echo 운전석 ;;
+    passenger)  echo 조수석 ;;
+    rear_left)  echo 뒷좌석 왼쪽 ;;
+    rear_right) echo 뒷좌석 오른쪽 ;;
+    *)          echo "$1" ;;
+    esac
 }
 
 jobs_for() {  # jobs_for <temp in tenths>: what this temperature asks for, or nothing
     local s l j=
-    if [ $1 -le $(limit cold_below 50) ]; then
+    if [ $1 -le $(cold_limit) ]; then
         [ "$(setting wheel true)" = true ] && j=wheel_heat
         for s in driver passenger rear_left rear_right; do
             case $s in driver) l=$(setting heat_$s medium) ;; *) l=$(setting heat_$s off) ;; esac
             [ "$l" = off ] || j="$j seat_heat:$s:$l"
         done
-    elif [ $1 -ge $(limit hot_above 85) ]; then
+    elif [ $1 -ge $(hot_limit) ]; then
         for s in driver passenger; do
             case $s in driver) l=$(setting cool_$s medium) ;; *) l=$(setting cool_$s off) ;; esac
             [ "$l" = off ] || j="$j seat_vent:$s:$l"
@@ -97,9 +156,10 @@ jobs_for() {  # jobs_for <temp in tenths>: what this temperature asks for, or no
 }
 
 result() {    # result <what> <answer> <state before>: 0 when it's done with, 1 to look again
+    # hmgapid의 응답 문구(ok, refused...)는 HMG-API가 정한 영어이므로 번역하지 않습니다.
     case "$2" in
     "refused: waiting"*) return 1 ;;   # the owner's question is on the screen
-    refused*) log "$1: $2"; return 0 ;;
+    refused*) log "$1: 거부됨 ($2)"; return 0 ;;
     ok*) ;;
     *) return 1 ;;                     # no answer from the vehicle service
     esac
@@ -112,17 +172,17 @@ send() {      # send <job>: wheel_heat or seat_heat:driver:low
     local cmd=${1%%:*} rest=${1#*:} seat state
     if [ "$cmd" = wheel_heat ]; then
         state=$(seen wheel_heat)
-        [ "$state" = 1 ] && { log "wheel heat is on"; return 0; }
-        result "wheel heat" "$(hmgapid vehicle-do wheel_heat on 2>&1)" "$state"
+        [ "$state" = 1 ] && { log "핸들 열선이 켜져 있음"; return 0; }
+        result "핸들 열선" "$(hmgapid vehicle-do wheel_heat on 2>&1)" "$state"
         return
     fi
     seat=${rest%:*}
     state=$(seen seat_state.$seat)
     if [ "$state" != - ] && [ "$state" -ge 3 ] && [ "$state" -le 8 ]; then
-        log "$seat seat is at step $state"   # the driver's or ours
+        log "$(seat_name $seat) 좌석이 이미 $state 단계로 켜져 있음"   # 운전자가 켰거나 이 모드가 켠 것
         return 0
     fi
-    result "$seat seat" "$(hmgapid vehicle-do $cmd $seat ${rest#*:} 2>&1)" "$state"
+    result "$(seat_name $seat) 좌석" "$(hmgapid vehicle-do $cmd $seat ${rest#*:} 2>&1)" "$state"
 }
 
 apply() {     # apply <jobs>: send each, again until the car shows it (a minute at most)
@@ -138,26 +198,26 @@ apply() {     # apply <jobs>: send each, again until the car shows it (a minute 
         n=$(( n + 1 ))
         [ -n "$jobs" ] && sleep 3
     done
-    [ -z "$jobs" ] || log "the car didn't show:$jobs"
+    [ -z "$jobs" ] || log "1분 동안 차량에 반영되지 않음:$jobs"
 }
 
 on_start() {  # SNAP holds START's readings
     local t waited= jobs
     # a service restart mid-drive isn't a start; right after the unit boots it may be one
     if [ "$(seen moving)" = 1 ] && [ "$(uptime_s)" -ge 180 ]; then
-        log "READY but already moving (the service restarted), no action"
+        log "READY지만 이미 주행 중(서비스 재시작으로 판단), 동작 안 함"
         return
     fi
     load_settings
-    unit=$(setting unit f)
+    unit=$(setting unit $DEFAULT_UNIT)
     until t=$(outside); do
-        [ "$(seen hv.ready)" = 0 ] && { log "the car went off, no action"; return; }
-        [ -n "$waited" ] || { log "waiting for an outside temperature"; waited=1; }
+        [ "$(seen hv.ready)" = 0 ] && { log "시동이 꺼짐, 동작 안 함"; return; }
+        [ -n "$waited" ] || { log "외기온도를 기다리는 중"; waited=1; }
         sleep 3
         snapshot $START
     done
     jobs=$(jobs_for $t)
-    log "outside $(deg $t), limits $(deg $(limit cold_below 50)) and $(deg $(limit hot_above 85)): ${jobs:-no action}"
+    log "외기 $(deg $t), 기준 $(deg $(cold_limit)) 이하 열선 / $(deg $(hot_limit)) 이상 통풍: ${jobs:-동작 안 함}"
     apply "$jobs"
 }
 
@@ -165,16 +225,16 @@ uptime_s() { local u x; read u x < "$UP"; echo "${u%.*}"; }
 
 if [ "$1" = check ]; then
     load_settings
-    unit=$(setting unit f)
+    unit=$(setting unit $DEFAULT_UNIT)
     snapshot $START
-    if [ -n "$2" ]; then t=$(tenths "$2"); else t=$(outside); fi || { echo "no outside temperature"; exit 1; }
-    echo "hv.ready $(seen hv.ready), moving $(seen moving), outside $(deg $t)"
-    echo "limits $(deg $(limit cold_below 50)) and $(deg $(limit hot_above 85))"
-    echo "would send: $(jobs_for $t)"
+    if [ -n "$2" ]; then t=$(tenths "$2"); else t=$(outside); fi || { echo "외기온도 값이 없음"; exit 1; }
+    echo "hv.ready $(seen hv.ready), 주행 중 $(seen moving), 외기 $(deg $t)"
+    echo "기준: $(deg $(cold_limit)) 이하 열선 / $(deg $(hot_limit)) 이상 통풍"
+    echo "보낼 명령: $(jobs_for $t)"
     exit 0
 fi
 
-log "started"
+log "서비스 시작"
 armed=1; last=$(uptime_s)
 while :; do
     now=$(uptime_s)

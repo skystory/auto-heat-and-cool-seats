@@ -4,105 +4,105 @@
     {
       "key": "unit",
       "type": "choice",
-      "default": "f",
-      "title": "Temperature limits are in",
+      "default": "c",
+      "title": "기준 온도 단위",
       "options": [
-        { "value": "f", "title": "Fahrenheit" },
-        { "value": "c", "title": "Celsius" }
+        { "value": "c", "title": "섭씨 (℃)" },
+        { "value": "f", "title": "화씨 (℉)" }
       ],
-      "description": "Changing this doesn't convert the two limits below, so update them too."
+      "description": "단위를 바꿔도 아래 두 기준 온도는 자동으로 바뀌지 않습니다. 함께 고쳐 주세요."
     },
     {
       "key": "cold_below",
       "type": "number",
-      "default": 50,
-      "title": "Cold limit: heat at or below",
-      "description": "Whole degrees; can be negative. Changes count from the next start."
+      "default": 10,
+      "title": "추위 기준: 이 온도 이하이면 열선 켜기",
+      "description": "정수로 입력하며 음수도 됩니다. 다음 시동부터 적용됩니다."
     },
     {
       "key": "hot_above",
       "type": "number",
-      "default": 85,
-      "title": "Hot limit: cool at or above",
-      "description": "Whole degrees; can be negative. Changes count from the next start."
+      "default": 29,
+      "title": "더위 기준: 이 온도 이상이면 통풍 켜기",
+      "description": "정수로 입력하며 음수도 됩니다. 다음 시동부터 적용됩니다."
     },
     {
       "key": "wheel",
       "type": "toggle",
       "default": true,
-      "title": "Steering wheel heat when it's cold"
+      "title": "추울 때 핸들 열선 켜기"
     },
     {
       "key": "heat_driver",
       "type": "choice",
       "default": "medium",
-      "title": "Driver seat heat when it's cold",
+      "title": "추울 때 운전석 열선",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "medium", "title": "Medium" },
-        { "value": "high", "title": "High" }
+        { "value": "off",    "title": "켜지 않음" },
+        { "value": "low",    "title": "1단 (약)" },
+        { "value": "medium", "title": "2단 (중)" },
+        { "value": "high",   "title": "3단 (강)" }
       ]
     },
     {
       "key": "heat_passenger",
       "type": "choice",
       "default": "off",
-      "title": "Passenger seat heat when it's cold",
+      "title": "추울 때 조수석 열선",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "medium", "title": "Medium" },
-        { "value": "high", "title": "High" }
+        { "value": "off",    "title": "켜지 않음" },
+        { "value": "low",    "title": "1단 (약)" },
+        { "value": "medium", "title": "2단 (중)" },
+        { "value": "high",   "title": "3단 (강)" }
       ]
     },
     {
       "key": "heat_rear_left",
       "type": "choice",
       "default": "off",
-      "title": "Rear left seat heat when it's cold",
+      "title": "추울 때 뒷좌석 왼쪽 열선",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "high", "title": "High" }
+        { "value": "off",  "title": "켜지 않음" },
+        { "value": "low",  "title": "1단 (약)" },
+        { "value": "high", "title": "2단 (강)" }
       ]
     },
     {
       "key": "heat_rear_right",
       "type": "choice",
       "default": "off",
-      "title": "Rear right seat heat when it's cold",
+      "title": "추울 때 뒷좌석 오른쪽 열선",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "high", "title": "High" }
+        { "value": "off",  "title": "켜지 않음" },
+        { "value": "low",  "title": "1단 (약)" },
+        { "value": "high", "title": "2단 (강)" }
       ]
     },
     {
       "key": "cool_driver",
       "type": "choice",
       "default": "medium",
-      "title": "Driver seat cooling when it's hot",
+      "title": "더울 때 운전석 통풍",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "medium", "title": "Medium" },
-        { "value": "high", "title": "High" }
+        { "value": "off",    "title": "켜지 않음" },
+        { "value": "low",    "title": "1단 (약)" },
+        { "value": "medium", "title": "2단 (중)" },
+        { "value": "high",   "title": "3단 (강)" }
       ],
-      "description": "Leave this off if the seat has no ventilation."
+      "description": "통풍 시트가 없는 좌석이면 '켜지 않음'으로 두세요."
     },
     {
       "key": "cool_passenger",
       "type": "choice",
       "default": "off",
-      "title": "Passenger seat cooling when it's hot",
+      "title": "더울 때 조수석 통풍",
       "options": [
-        { "value": "off", "title": "Don't turn on" },
-        { "value": "low", "title": "Low" },
-        { "value": "medium", "title": "Medium" },
-        { "value": "high", "title": "High" }
+        { "value": "off",    "title": "켜지 않음" },
+        { "value": "low",    "title": "1단 (약)" },
+        { "value": "medium", "title": "2단 (중)" },
+        { "value": "high",   "title": "3단 (강)" }
       ],
-      "description": "Leave this off if the seat has no ventilation."
+      "description": "통풍 시트가 없는 좌석이면 '켜지 않음'으로 두세요."
     }
   ]
 }
