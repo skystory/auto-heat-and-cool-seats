@@ -163,18 +163,31 @@ result() {    # result <what> <answer> <state before>: 0 when it's done with, 1 
     ok*) ;;
     *) return 1 ;;                     # no answer from the vehicle service
     esac
-    # it was off (0 and 15: not reported yet): the next pass shows if it took
-    [ "$3" = 0 ] || [ "$3" = 2 ] || [ "$3" = 15 ] && return 1
+    # 꺼져 있었거나(0, 2), 아직 보고 전(15), 상태를 읽지 못함(-): 다음 판에서 반영됐는지 확인
+    [ "$3" = 0 ] || [ "$3" = 2 ] || [ "$3" = 15 ] || [ "$3" = - ] && return 1
     return 0
 }
 
+awaiting_state() {  # awaiting_state <job>: ok를 받았지만 차량 상태를 아직 읽지 못한 작업인가
+    case " $UNCONFIRMED " in *" $1 "*) return 0 ;; esac
+    return 1
+}
+
+remember_unconfirmed() {  # remember_unconfirmed <job> <answer> <state before>: 상태를 모르는 채 ok를 받았으면 기록
+    case "$2" in ok*) [ "$3" = - ] && UNCONFIRMED="$UNCONFIRMED $1" ;; esac
+}
+
 send() {      # send <job>: wheel_heat or seat_heat:driver:low
-    local cmd=${1%%:*} rest=${1#*:} seat state
+    local cmd=${1%%:*} rest=${1#*:} seat state answer
     if [ "$cmd" = wheel_heat ]; then
         state=$(seen wheel_heat)
         [ "$state" = 1 ] && { log "핸들 열선이 켜져 있음"; return 0; }
-        result "핸들 열선" "$(hmgapid vehicle-do wheel_heat on 2>&1)" "$state"
-        return
+        # 이미 ok를 받았고 상태만 못 읽는 중이면 다시 보내지 않고 기다림
+        [ "$state" = - ] && awaiting_state "$1" && return 1
+        answer=$(hmgapid vehicle-do wheel_heat on 2>&1)
+        result "핸들 열선" "$answer" "$state" && return 0
+        remember_unconfirmed "$1" "$answer" "$state"
+        return 1
     fi
     seat=${rest%:*}
     state=$(seen seat_state.$seat)
@@ -182,11 +195,16 @@ send() {      # send <job>: wheel_heat or seat_heat:driver:low
         log "$(seat_name $seat) 좌석이 이미 $state 단계로 켜져 있음"   # 운전자가 켰거나 이 모드가 켠 것
         return 0
     fi
-    result "$(seat_name $seat) 좌석" "$(hmgapid vehicle-do $cmd $seat ${rest#*:} 2>&1)" "$state"
+    [ "$state" = - ] && awaiting_state "$1" && return 1
+    answer=$(hmgapid vehicle-do $cmd $seat ${rest#*:} 2>&1)
+    result "$(seat_name $seat) 좌석" "$answer" "$state" && return 0
+    remember_unconfirmed "$1" "$answer" "$state"
+    return 1
 }
 
 apply() {     # apply <jobs>: send each, again until the car shows it (a minute at most)
-    local jobs=$1 left j n=0
+    local jobs=$1 left j n=0 unshown= unconfirmed=
+    UNCONFIRMED=
     while [ -n "$jobs" ] && [ $n -lt 20 ]; do
         snapshot hv.ready wheel_heat seat_state.driver seat_state.passenger seat_state.rear_left seat_state.rear_right
         [ "$(seen hv.ready)" = 0 ] && return
@@ -198,14 +216,21 @@ apply() {     # apply <jobs>: send each, again until the car shows it (a minute 
         n=$(( n + 1 ))
         [ -n "$jobs" ] && sleep 3
     done
-    [ -z "$jobs" ] || log "1분 동안 차량에 반영되지 않음:$jobs"
+    [ -z "$jobs" ] && return
+    for j in $jobs; do
+        if awaiting_state "$j"; then unconfirmed="$unconfirmed $j"; else unshown="$unshown $j"; fi
+    done
+    [ -z "$unshown" ] || log "1분 동안 차량에 반영되지 않음:$unshown"
+    [ -z "$unconfirmed" ] || log "명령은 받아들여졌지만 차량 상태를 읽지 못해 반영 여부를 확인하지 못함:$unconfirmed"
 }
 
 on_start() {  # SNAP holds START's readings
-    local t waited= jobs
+    local t waited= jobs booted_seconds
     # a service restart mid-drive isn't a start; right after the unit boots it may be one
-    if [ "$(seen moving)" = 1 ] && [ "$(uptime_s)" -ge 180 ]; then
-        log "READY지만 이미 주행 중(서비스 재시작으로 판단), 동작 안 함"
+    # (uptime을 읽지 못하면 부팅 직후인지 알 수 없으므로 주행 중이면 동작하지 않음)
+    booted_seconds=$(uptime_s)
+    if [ "$(seen moving)" = 1 ] && { [ $booted_seconds -lt 0 ] || [ $booted_seconds -ge 180 ]; }; then
+        log "READY지만 이미 주행 중(서비스 재시작이거나 부팅 시점을 알 수 없음), 동작 안 함"
         return
     fi
     load_settings
@@ -221,7 +246,12 @@ on_start() {  # SNAP holds START's readings
     apply "$jobs"
 }
 
-uptime_s() { local u x; read u x < "$UP"; echo "${u%.*}"; }
+uptime_s() {  # 부팅 후 지난 초(정수). 읽지 못하면 -1
+    local u x
+    read u x 2>/dev/null < "$UP"
+    u=${u%.*}
+    case "$u" in ''|*[!0-9]*) echo -1 ;; *) echo "$u" ;; esac
+}
 
 if [ "$1" = check ]; then
     load_settings
@@ -238,7 +268,8 @@ log "서비스 시작"
 armed=1; last=$(uptime_s)
 while :; do
     now=$(uptime_s)
-    [ $(( now - last )) -gt 20 ] && armed=1   # the unit slept: this is a new start
+    # the unit slept: this is a new start (uptime을 읽지 못한 동안은 판단하지 않음)
+    [ $now -ge 0 ] && [ $last -ge 0 ] && [ $(( now - last )) -gt 20 ] && armed=1
     last=$now
     snapshot $START
     ready=$(seen hv.ready)

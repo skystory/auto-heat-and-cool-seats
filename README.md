@@ -10,12 +10,14 @@ v1.0.1을 포크해 **섭씨 우선**과 **한글화**를 적용한 버전입니
 [Cold-start Heat](https://github.com/eclipseempire/hkmc-coldstart-heat)를 HMG-API용으로 옮기고
 통풍과 뒷좌석을 더한 모드입니다.
 
-## 원본과 달라진 점 (v1.1.0)
+## 원본과 달라진 점 (v1.1.0 ~ v1.1.1)
 
 - 기본 단위가 **섭씨(℃)**이고, 설정 화면에서도 섭씨가 먼저 나옵니다. 기본 기준은 10℃ 이하 열선, 29℃ 이상 통풍입니다.
 - 설정 화면, 모드 설명, 로그, `check` 출력이 한국어입니다.
 - 고른 단위의 외기온도 값이 없으면 다른 단위 값을 환산해서 씁니다.
 - NEMESIS 패키지의 호환 차종을 **쏘나타 하이브리드(DN8 HEV) 국내형, 펌웨어 260902**로 바꿨습니다.
+- (v1.1.1) 명령은 받아들여졌는데 좌석·핸들 상태를 읽지 못하면, 1분 동안 다시 보내지 않고 상태가
+  읽히기를 기다렸다가 확인하지 못했다고 로그에 남깁니다. `/proc/uptime`을 읽지 못해도 멈추지 않습니다.
 
 ## 대상 차량
 
@@ -39,8 +41,8 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
 
 ### HMG-API 앱으로 설치
 
-1. `auto-heat-and-cool-seats-v1.1.0-hmgapi-usb.zip`을 FAT32 USB 메모리 최상위에 압축 해제합니다.
-   `HMGAPI/updates/auto-heat-and-cool-seats-v1.1.0.zip`이 생기면 됩니다.
+1. `auto-heat-and-cool-seats-v1.1.1-hmgapi-usb.zip`을 FAT32 USB 메모리 최상위에 압축 해제합니다.
+   `HMGAPI/updates/auto-heat-and-cool-seats-v1.1.1.zip`이 생기면 됩니다.
 2. 차량에 꽂고 HMG-API 앱의 업데이트 화면에서 모드를 설치합니다.
 3. 앱에서 **Apply changes**를 누릅니다.
 
@@ -48,7 +50,7 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
 
 ### NEMESIS로 설치
 
-1. `auto-heat-and-cool-seats-v1.1.0-nemesis-usb.zip`을 FAT32 또는 exFAT USB 메모리 최상위에
+1. `auto-heat-and-cool-seats-v1.1.1-nemesis-usb.zip`을 FAT32 또는 exFAT USB 메모리 최상위에
    압축 해제합니다. `NEMESIS.data`와 `packages` 폴더가 최상위에 있어야 하며, USB에는 NEMESIS
    패키지를 하나만 두세요.
 2. Android가 다 켜진 뒤 USB를 꽂고 설치를 확인합니다.
@@ -89,6 +91,7 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
   값이 없는 것으로 보고 계속 기다립니다. 실제 -40도 무시됩니다.
 - 명령은 `hmgapid vehicle-do`로 `seat_heat`, `seat_vent`, `wheel_heat`을 보냅니다.
 - 이미 열선이나 통풍이 켜진 좌석, 이미 켜진 핸들 열선은 건드리지 않습니다.
+- 명령은 받아들여졌지만 차량이 상태를 알려주지 않으면, 다시 보내지 않고 최대 1분 동안 확인만 기다립니다.
 - 차량에 반영된 게 보이지 않으면 3초마다 최대 1분 동안 다시 보냅니다.
 - READY 시점에 이미 주행 중이고 헤드유닛이 켜진 지 3분이 넘었으면, 서비스가 재시작된 것으로
   보고 아무것도 하지 않습니다.
@@ -112,10 +115,11 @@ USB 디버깅(ADB over USB)이 켜져 있으면 USB 메모리를 읽지 못하�
 ## 테스트
 
 ```bash
-test/run.sh
+test/run.sh                  # bash
+TEST_SHELL=mksh test/run.sh  # 헤드유닛과 같은 mksh
 ```
 
-가짜 `hmgapid`와 `sleep`으로 차량 없이 bash에서 스크립트를 돌립니다.
+가짜 `hmgapid`와 `sleep`으로 차량 없이 스크립트를 돌립니다.
 
 ## 라이선스
 

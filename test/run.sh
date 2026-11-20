@@ -1,8 +1,10 @@
 #!/bin/bash
 # Off-car test of mod/seats.sh with a fake hmgapid and sleep. No mksh on the Mac, so
 # it runs under bash; the HMG-API script check covers which commands the unit has.
-#   test/run.sh
+#   test/run.sh                  bash로 실행
+#   TEST_SHELL=mksh test/run.sh  헤드유닛과 같은 mksh로 실행
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+TEST_SHELL=${TEST_SHELL:-bash}
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export T PATH="$T/bin:$PATH" HMGAPI_MOD=auto-heat-and-cool-seats UP="$T/uptime"
 mkdir "$T/bin"
@@ -59,7 +61,7 @@ scenario() {  # scenario <name> <settings json> <hv.ready sequence, one per line
     echo 5 > "$T/r/outside_temp"; echo 41 > "$T/r/outside_temp_f"   # 5 ℃ = 41 ℉
     for c in "$@"; do eval "$c"; done
     echo "$seq" > "$T/seq"
-    bash "$HERE/mod/seats.sh" > "$T/log" 2>&1 &
+    $TEST_SHELL "$HERE/mod/seats.sh" > "$T/log" 2>&1 &
     wait $! 2>/dev/null
     got=$(cat "$T/sent" 2>/dev/null)
     if [ "$got" = "$want" ]; then pass=$((pass + 1)); echo "ok   $name"
@@ -134,6 +136,17 @@ scenario "owner refuses: not sent again" '{"wheel":false}' "$ON" "seat_heat driv
 scenario "owner's question up, then allowed" '{"wheel":false}' "$ON" $'seat_heat driver medium\nseat_heat driver medium' \
     'echo "refused: waiting for the owner" > $T/refuse'
 
+# uptime을 읽지 못할 때
+scenario "uptime 못 읽어도 시동 때는 동작" '{}' "$ON" "$COLD" ': > $UP'
+scenario "uptime 못 읽고 이미 주행 중이면 동작 안 함" '{}' "$ON" "" ': > $UP' 'echo 1 > $T/r/moving'
+
+# 명령은 ok인데 차량 상태를 읽지 못할 때: 다시 보내지 않고 확인만 기다림
+scenario "좌석 상태를 읽지 못해도 한 번만 보냄" '{"wheel":false}' "$ON$'\n'$ON$'\n'$ON$'\n'$ON" "seat_heat driver medium" \
+    'rm $T/r/seat_state.driver' 'touch $T/ignored'
+grep -q "확인하지 못함: seat_heat:driver:medium" "$T/log" && echo "ok   ...and says it couldn't confirm" || { fail=$((fail + 1)); echo "FAIL no unconfirmed line"; cat "$T/log"; }
+scenario "핸들 열선 상태를 읽지 못해도 한 번만 보냄" '{"heat_driver":"off"}' "$ON" "wheel_heat on" 'rm $T/r/wheel_heat' 'touch $T/ignored'
+scenario "좌석 상태를 늦게 읽으면 그걸로 확인" '{"wheel":false}' "$ON" "seat_heat driver medium" 'rm $T/r/seat_state.driver'
+
 # a seat that never shows on: sent every pass, then it gives up
 want=$(for i in $(seq 20); do echo "seat_heat driver medium"; done)
 scenario "car never shows it: stops after 20" '{"wheel":false}' "$ON$'\n'$ON$'\n'$ON$'\n'$ON" "$want" 'touch $T/ignored'
@@ -142,13 +155,13 @@ grep -q "차량에 반영되지 않음" "$T/log" && echo "ok   ...and says so" |
 # check 모드: 출력만 하고 명령은 보내지 않음
 rm -rf "$T/r" "$T/sent"; mkdir "$T/r"; echo '{}' > "$T/settings"
 echo 1 > "$T/r/hv.ready"; echo 0 > "$T/r/moving"; echo 3 > "$T/r/outside_temp"
-out=$(bash "$HERE/mod/seats.sh" check 2>&1)
+out=$($TEST_SHELL "$HERE/mod/seats.sh" check 2>&1)
 if echo "$out" | grep -q "외기 3.0℃" && echo "$out" | grep -q "보낼 명령: wheel_heat seat_heat:driver:medium" && [ ! -s "$T/sent" ]; then
     pass=$((pass + 1)); echo "ok   check: 섭씨 출력, 명령 안 보냄"
 else fail=$((fail + 1)); echo "FAIL check"; echo "$out"; fi
-out=$(bash "$HERE/mod/seats.sh" check 30 2>&1)
+out=$($TEST_SHELL "$HERE/mod/seats.sh" check 30 2>&1)
 if echo "$out" | grep -q "보낼 명령: seat_vent:driver:medium"; then pass=$((pass + 1)); echo "ok   check 30: 통풍"
 else fail=$((fail + 1)); echo "FAIL check 30"; echo "$out"; fi
 
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed ($TEST_SHELL)"
 [ $fail = 0 ]
